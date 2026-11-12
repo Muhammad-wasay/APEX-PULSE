@@ -277,25 +277,37 @@ with st.sidebar:
     if LOGO_DARK.exists():
         st.markdown(f'<img src="data:image/png;base64,{_b64(LOGO_DARK)}" style="width:100%;max-width:240px;display:block;margin:-10px auto 6px;">', unsafe_allow_html=True)
     st.markdown("## Athlete Profile")
-    athlete_name = st.text_input("Athlete Name", value="Ali Khan")
-    age = st.slider("Age", 15, 45, 22)
-    weight = st.number_input("Weight (kg)", 40.0, 130.0, 72.0, step=0.5)
+    athlete_name = st.text_input("Athlete Name", value="", placeholder="Enter athlete name...")
+    age = st.number_input("Age (Years)", min_value=14, max_value=50, value=None, step=1, placeholder="Enter age (e.g. 22)")
+    weight = st.number_input("Weight (kg)", min_value=40.0, max_value=130.0, value=None, step=0.5, placeholder="Enter weight (e.g. 72)")
     sport_type = st.selectbox(
         "Primary Sport Category",
-        ["Sprint / Power (100m, Jumping)", "Team Sport (Football, Cricket, Basketball)", "Endurance (Marathon, Cycling)"]
+        ["Sprint / Power (100m, Jumping)", "Team Sport (Football, Cricket, Basketball)", "Endurance (Marathon, Cycling)"],
+        index=None,
+        placeholder="Select primary sport..."
     )
     st.divider()
     st.markdown('<div class="steps"><b>How to use:</b><br><b>1.</b> Fill your profile here<br><b>2.</b> Answer the 4 checks in the tabs<br><b>3.</b> Read your advice below</div>', unsafe_allow_html=True)
+
+profile_complete = bool(athlete_name.strip() and age is not None and weight is not None and sport_type is not None)
 
 # ---------------------------------------------------------
 # NAVBAR (filled after the rules run) + HEADER BANNER
 # ---------------------------------------------------------
 navbar_slot = st.empty()
 navbar_slot.markdown(nav_html(), unsafe_allow_html=True)
+hero_heading = f"Hi, <span>{athlete_name.strip()}</span>" if athlete_name.strip() else "Welcome to <span>Apex Pulse</span>"
+hero_chips = "".join([
+    f'<span class="chip">{int(age)} yrs</span>' if age is not None else "",
+    f'<span class="chip">{weight} kg</span>' if weight is not None else "",
+    f'<span class="chip">{sport_type.split(" (")[0]}</span>' if sport_type else "",
+])
+if not hero_chips:
+    hero_chips = '<span class="chip">Fill profile in sidebar</span>'
 st.markdown(f"""<div class="hero">
-<div><h1>Hi, <span>{athlete_name}</span></h1>
+<div><h1>{hero_heading}</h1>
 <p>Answer the four quick checks below and get your personal training advice.</p></div>
-<div class="chips"><span class="chip">{age} yrs</span><span class="chip">{weight} kg</span><span class="chip">{sport_type.split(' (')[0]}</span></div>
+<div class="chips">{hero_chips}</div>
 </div>""", unsafe_allow_html=True)
 
 # =========================================================
@@ -695,7 +707,7 @@ with tab2:
             )
 
         # C-27: Age over 32 + sore muscles
-        if age > 32 and doms_level in ["Moderate", "Severe"]:   # CONDITION
+        if age is not None and age > 32 and doms_level in ["Moderate", "Severe"]:   # CONDITION
             fire(
                 "C-27",                                                                                   # Rule ID
                 "You said: age over 32 + sore muscles. Older athletes recover more slowly.",              # Why
@@ -705,7 +717,7 @@ with tab2:
             )
 
         # C-28: Age 18 or under + training up more than 15%
-        if age <= 18 and weekly_load_spike > 15:   # CONDITION
+        if age is not None and age <= 18 and weekly_load_spike > 15:   # CONDITION
             fire(
                 "C-28",                                                                                   # Rule ID
                 "You said: age 18 or under + training up more than 15%. Young bodies get injured easily.",  # Why
@@ -749,8 +761,8 @@ with tab3:
         sweat_loss_kg = st.number_input("Weight Lost After Session (kg)", 0.0, 5.0, 0.5, step=0.1)
         urine_color = st.selectbox("Urine Hydration Scale (1-8)", ["1-2 (Pale/Optimal)", "3-4 (Light Yellow/Mild Dehydration)", "5-8 (Dark/Severe Dehydration)"])
 
-    sweat_pct = (sweat_loss_kg / weight) * 100                # % of body weight lost as sweat
-    water_to_drink = max(1.0, sweat_loss_kg * 1.5)            # liters to drink back
+    sweat_pct = (sweat_loss_kg / weight) * 100 if weight else 0.0   # % of body weight lost as sweat
+    water_to_drink = max(1.0, sweat_loss_kg * 1.5)                  # liters to drink back
 
     # Only run Nutrition rules when the user actually changes an input in this tab
     tab3_used = (session_mins != 75 or temp_c != 32 or sweat_loss_kg != 0.5 or urine_color != "1-2 (Pale/Optimal)")
@@ -823,30 +835,34 @@ with tab3:
 
         # C-37: Endurance sport + session of 90 minutes or more
         if session_mins >= 90 and sport_type == "Endurance (Marathon, Cycling)":   # CONDITION
+            carbs_g = f"{int(weight * 8)}g" if weight else "8g per kg"
             fire(
                 "C-37",                                                                                   # Rule ID
                 "You said: endurance sport + session of 90 minutes or more. You use up a lot of energy.", # Why
-                f"🍝 **Eat more carbs:** Aim for {int(weight * 8)}g of carbs per day (8g per kg of body weight) and take 60g of carbs every hour while training.",  # Advice
+                f"🍝 **Eat more carbs:** Aim for {carbs_g} of carbs per day (8g per kg of body weight) and take 60g of carbs every hour while training.",  # Advice
                 0,                                                                                        # Readiness change (no change)
                 None                                                                                      # Risk level (no change)
             )
 
         # C-38: Sprint / Power sport
         if sport_type == "Sprint / Power (100m, Jumping)":   # CONDITION
+            protein_g = f"{int(weight * 2.0)}g" if weight else "2g per kg"
             fire(
                 "C-38",                                                                                   # Rule ID
                 "You said: your sport is Sprint / Power. Your muscles need extra protein to repair.",     # Why
-                f"🥩 **Eat more protein:** Aim for {int(weight * 2.0)}g of protein per day (2g per kg of body weight) and 5g of creatine daily.",  # Advice
+                f"🥩 **Eat more protein:** Aim for {protein_g} of protein per day (2g per kg of body weight) and 5g of creatine daily.",  # Advice
                 0,                                                                                        # Readiness change (no change)
                 None                                                                                      # Risk level (no change)
             )
 
         # C-39: Team sport
         if sport_type == "Team Sport (Football, Cricket, Basketball)":   # CONDITION
+            t_carbs = f"{int(weight * 6)}g" if weight else "6g per kg"
+            t_prot = f"{int(weight * 1.6)}g" if weight else "1.6g per kg"
             fire(
                 "C-39",                                                                                   # Rule ID
                 "You said: your sport is a Team Sport. You need a mix of carbs and protein.",             # Why
-                f"🍝 **Eat a balanced diet:** Aim for {int(weight * 6)}g of carbs and {int(weight * 1.6)}g of protein per day.",  # Advice
+                f"🍝 **Eat a balanced diet:** Aim for {t_carbs} of carbs and {t_prot} of protein per day.",  # Advice
                 0,                                                                                        # Readiness change (no change)
                 None                                                                                      # Risk level (no change)
             )
@@ -966,7 +982,7 @@ with tab4:
         # ===== BODY and OVERALL RULES (C-49, C-50) =====
 
         # C-49: Heavy body + low jump
-        if weight > 90 and vert_jump < 45:   # CONDITION
+        if weight is not None and weight > 90 and vert_jump < 45:   # CONDITION
             fire(
                 "C-49",                                                                                   # Rule ID
                 f"You said: weight {weight}kg (over 90kg) + jump {vert_jump}cm (under 45cm). A heavy body puts stress on your joints.",  # Why
@@ -1004,41 +1020,48 @@ elif readiness_score < 75:
 # ---------------------------------------------------------
 # PART 4. LIVE DASHBOARD SUMMARY
 # ---------------------------------------------------------
-navbar_slot.markdown(nav_html(risk_level, readiness_score), unsafe_allow_html=True)
-
+any_tab_used = tab1_used or tab2_used or tab3_used or tab4_used
 st.markdown('<div id="dashboard" class="section-title">Your Results</div>', unsafe_allow_html=True)
-st.markdown('<div class="legend"><span><i style="background:#34d399"></i>Safe</span><span><i style="background:#fbbf24"></i>Be careful</span><span><i style="background:#f87171"></i>Urgent</span></div>', unsafe_allow_html=True)
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Readiness", f"{readiness_score}%")
-m2.metric("Risk Level", risk_level)
-m3.metric("Rules Matched", f"{len(triggered_rules)}")
-m4.metric("Daily Water", f"{round(weight * 0.04, 1)} L")
+if not any_tab_used and not profile_complete:
+    st.markdown(
+        f'<div class="rec-card">{gicon("info", 36)}<div><b>Waiting for your input:</b> Fill in your <b>Athlete Profile</b> in the left sidebar (Name, Age, Weight, Sport) and adjust any check in the 4 tabs above to see your live Readiness, Risk Level, and advice.</div></div>',
+        unsafe_allow_html=True
+    )
+else:
+    navbar_slot.markdown(nav_html(risk_level, readiness_score), unsafe_allow_html=True)
+    st.markdown('<div class="legend"><span><i style="background:#34d399"></i>Safe</span><span><i style="background:#fbbf24"></i>Be careful</span><span><i style="background:#f87171"></i>Urgent</span></div>', unsafe_allow_html=True)
 
-st.progress(readiness_score / 100)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Readiness", f"{readiness_score}%")
+    m2.metric("Risk Level", risk_level)
+    m3.metric("Rules Matched", f"{len(triggered_rules)}")
+    m4.metric("Daily Water", f"{round(weight * 0.04, 1)} L" if weight else "Enter weight")
 
-col_rec, col_trace = st.columns([1.2, 1], gap="large")
+    st.progress(readiness_score / 100)
 
-def _rec_class(text):
-    if text.startswith(("🚨", "🛑")): return "rec-red"
-    if text.startswith(("⚠️", "📉", "🩹", "🧊")): return "rec-amber"
-    if text.startswith(("✅", "⚡", "🚀", "📈")): return "rec-green"
-    return ""
+    col_rec, col_trace = st.columns([1.2, 1], gap="large")
 
-def _split_emoji(text):
-    """Split the leading emoji from the text so it can be shown as a glass icon."""
-    head, _, rest = text.partition(" ")
-    return (head, rest) if head and not head.isascii() else ("", text)
+    def _rec_class(text):
+        if text.startswith(("🚨", "🛑")): return "rec-red"
+        if text.startswith(("⚠️", "📉", "🩹", "🧊")): return "rec-amber"
+        if text.startswith(("✅", "⚡", "🚀", "📈")): return "rec-green"
+        return ""
 
-with col_rec:
-    st.markdown('<div class="section-title">What to do</div>', unsafe_allow_html=True)
-    for rec in recommendations:
-        emoji, body = _split_emoji(rec)
-        html_rec = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", body)
-        icon_html = gicon(EMOJI_TO_ICON.get(emoji, "info"), 36)
-        st.markdown(f'<div class="rec-card {_rec_class(rec)}">{icon_html}<div>{html_rec}</div></div>', unsafe_allow_html=True)
+    def _split_emoji(text):
+        """Split the leading emoji from the text so it can be shown as a glass icon."""
+        head, _, rest = text.partition(" ")
+        return (head, rest) if head and not head.isascii() else ("", text)
 
-with col_trace:
-    st.markdown('<div class="section-title">Why you got this advice</div>', unsafe_allow_html=True)
-    for rule_id, desc in triggered_rules:
-        st.markdown(f'<div class="rule-card"><span class="rule-badge">{rule_id}</span>{desc}</div>', unsafe_allow_html=True)
+    with col_rec:
+        st.markdown('<div class="section-title">What to do</div>', unsafe_allow_html=True)
+        for rec in recommendations:
+            emoji, body = _split_emoji(rec)
+            html_rec = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", body)
+            icon_html = gicon(EMOJI_TO_ICON.get(emoji, "info"), 36)
+            st.markdown(f'<div class="rec-card {_rec_class(rec)}">{icon_html}<div>{html_rec}</div></div>', unsafe_allow_html=True)
+
+    with col_trace:
+        st.markdown('<div class="section-title">Why you got this advice</div>', unsafe_allow_html=True)
+        for rule_id, desc in triggered_rules:
+            st.markdown(f'<div class="rule-card"><span class="rule-badge">{rule_id}</span>{desc}</div>', unsafe_allow_html=True)
